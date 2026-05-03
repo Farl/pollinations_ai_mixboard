@@ -127,6 +127,18 @@ function getApiKey(config) {
   return key;
 }
 
+function buildPollinationsHeaders(apiKey) {
+  const headers = {
+    "Content-Type": "application/json"
+  };
+
+  if (apiKey) {
+    headers.Authorization = `Bearer ${apiKey}`;
+  }
+
+  return headers;
+}
+
 function aspectToSize(aspectRatio) {
   switch (aspectRatio) {
     case "3:4":
@@ -204,9 +216,9 @@ async function generateWithPollinations(prompt, aspectRatio, imageInputs, config
       image: imageInputs.map((img) => img.url),
       size
     };
-    result = await postJson(`${baseUrl}/v1/images/edits?key=${encodeURIComponent(key)}`, {
+    result = await postJson(`${baseUrl}/v1/images/edits`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: buildPollinationsHeaders(key),
       body: JSON.stringify(payload)
     });
   } else {
@@ -215,9 +227,9 @@ async function generateWithPollinations(prompt, aspectRatio, imageInputs, config
       prompt,
       size
     };
-    result = await postJson(`${baseUrl}/v1/images/generations?key=${encodeURIComponent(key)}`, {
+    result = await postJson(`${baseUrl}/v1/images/generations`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: buildPollinationsHeaders(key),
       body: JSON.stringify(payload)
     });
   }
