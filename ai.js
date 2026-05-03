@@ -116,7 +116,7 @@ export async function fetchImageModels() {
 }
 
 function getApiKey(config) {
-  return config.POLLINATIONS_API_KEY || config.GITHUB_TOKEN || "";
+  return config.POLLINATIONS_API_KEY || config.GH_MODELS_TOKEN || config.GITHUB_TOKEN || "";
 }
 
 function aspectToSize(aspectRatio) {
@@ -182,7 +182,7 @@ async function generateWithWebsim(prompt, aspectRatio, imageInputs) {
 async function generateWithPollinations(prompt, aspectRatio, imageInputs, config) {
   const key = getApiKey(config);
   if (!key) {
-    throw new Error("AI generation is not configured. Set POLLINATIONS_API_KEY or GITHUB_TOKEN in runtime config.");
+    throw new Error("AI generation is not configured. Set POLLINATIONS_API_KEY (or GH_MODELS_TOKEN/GITHUB_TOKEN) in runtime config.");
   }
 
   const baseUrl = normalizeBaseUrl(config.POLLINATIONS_API_BASE_URL);
@@ -293,10 +293,29 @@ export async function generateNodesFromSelection(selected, descriptions, freeMod
   const provider = config.AI_PROVIDER || "pollinations";
   const effectiveInputs = (!freeMode && imageInputs.length) ? imageInputs : [];
 
-  let generatedUrl = await generateWithWebsim(prompt, aspect_ratio, effectiveInputs);
+  let generatedUrl = null;
+  let websimError = null;
+
+  try {
+    generatedUrl = await generateWithWebsim(prompt, aspect_ratio, effectiveInputs);
+  } catch (err) {
+    websimError = err;
+    console.warn("[imageGen] websim provider failed", err);
+  }
 
   if (!generatedUrl && provider === "pollinations") {
-    generatedUrl = await generateWithPollinations(prompt, aspect_ratio, effectiveInputs, config);
+    try {
+      generatedUrl = await generateWithPollinations(prompt, aspect_ratio, effectiveInputs, config);
+    } catch (pollinationsError) {
+      if (websimError) {
+        throw new Error(`Generation failed on both providers. Websim: ${websimError.message}. Pollinations: ${pollinationsError.message}`);
+      }
+      throw pollinationsError;
+    }
+  }
+
+  if (!generatedUrl && websimError) {
+    throw new Error(`Websim generation failed: ${websimError.message}`);
   }
 
   if (!generatedUrl) {

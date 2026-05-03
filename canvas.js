@@ -3,6 +3,26 @@ import React, { useEffect, useRef, useState } from "react";
 import { uuid, placeNonOverlapping, withinMarquee } from "./utils.js";
 import { saveCanvas, loadCanvas, storeImageBlob, getImageBlobUrl, deleteImage } from "./storage.js";
 import { describeImagesIfNeeded, fetchImageModels, generateNodesFromSelection, getSelectedImageModel, setSelectedImageModel } from "./ai.js";
+
+function getGenerationErrorMessage(error) {
+  const raw = String(error?.message || "Unknown generation error.");
+
+  if (/timed out/i.test(raw)) {
+    return "Generation timed out after 60s. Try fewer references or a simpler prompt.";
+  }
+  if (/not configured|api key|github_token|gh_models_token/i.test(raw)) {
+    return "Missing API key. Configure POLLINATIONS_API_KEY (or GH_MODELS_TOKEN/GITHUB_TOKEN).";
+  }
+  if (/401|403|unauthorized|forbidden|invalid key/i.test(raw)) {
+    return "Authentication failed. Please verify your model provider token/key.";
+  }
+  if (/429|rate limit|quota/i.test(raw)) {
+    return "Rate limited by provider. Please wait and retry.";
+  }
+
+  return raw.length > 180 ? `${raw.slice(0, 177)}...` : raw;
+}
+
 function CanvasApp() {
   const initialState = loadCanvas();
   const [nodes, setNodes] = useState(() => {
@@ -231,6 +251,7 @@ function CanvasApp() {
       setStatus("Select nodes first.");
       return;
     }
+    let success = false;
     setLoading(true);
     setStatus("Thinking\u2026");
     try {
@@ -255,7 +276,13 @@ function CanvasApp() {
           n = { id: uuid(), type: "text", x: pos.x, y: pos.y, w: pos.w, h: pos.h, text: out.text, selected: false };
         } else {
           const imgResp = await fetch(out.url);
+          if (!imgResp.ok) {
+            throw new Error(`Generated image download failed: ${imgResp.status} ${imgResp.statusText}`);
+          }
           const blob = await imgResp.blob();
+          if (!blob || blob.size === 0) {
+            throw new Error("Generated image was empty.");
+          }
           const imgId = uuid();
           await storeImageBlob(imgId, blob);
           const blobUrl = await getImageBlobUrl(imgId);
@@ -266,12 +293,13 @@ function CanvasApp() {
       }
       setNodes((prev) => [...prev, ...newNodes]);
       setStatus("Done.");
+      success = true;
     } catch (e) {
       console.error(e);
-      setStatus("Error.");
+      setStatus(`Generation failed: ${getGenerationErrorMessage(e)}`);
     } finally {
       setLoading(false);
-      setTimeout(() => setStatus(""), 1200);
+      setTimeout(() => setStatus(""), success ? 1200 : 6000);
     }
   }
   function onMouseDownCanvas(e) {
