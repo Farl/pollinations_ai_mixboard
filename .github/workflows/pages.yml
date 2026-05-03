@@ -24,6 +24,26 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
+      - name: Generate runtime config
+        env:
+          AI_PROVIDER: ${{ vars.AI_PROVIDER }}
+          POLLINATIONS_API_BASE_URL: ${{ vars.POLLINATIONS_API_BASE_URL }}
+          POLLINATIONS_IMAGE_MODEL: ${{ vars.POLLINATIONS_IMAGE_MODEL }}
+          POLLINATIONS_API_KEY: ${{ secrets.POLLINATIONS_API_KEY }}
+          GH_MODELS_TOKEN: ${{ secrets.GH_MODELS_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cat > config.runtime.js <<EOF
+          window.MIXBOARD_CONFIG = {
+            AI_PROVIDER: "${AI_PROVIDER:-pollinations}",
+            POLLINATIONS_API_BASE_URL: "${POLLINATIONS_API_BASE_URL:-https://gen.pollinations.ai}",
+            POLLINATIONS_IMAGE_MODEL: "${POLLINATIONS_IMAGE_MODEL:-kontext}",
+            POLLINATIONS_API_KEY: "${POLLINATIONS_API_KEY}",
+            GH_MODELS_TOKEN: "${GH_MODELS_TOKEN}",
+            GITHUB_TOKEN: "${GITHUB_TOKEN}"
+          };
+          EOF
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
