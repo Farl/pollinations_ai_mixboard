@@ -208,6 +208,60 @@ async function generateWithWebsim(prompt, aspectRatio, imageInputs) {
   return result && result.url ? result.url : null;
 }
 
+function loadImageElement(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("Failed to decode reference image."));
+    img.src = src;
+  });
+}
+
+async function buildEditReferenceImage(imageInputs) {
+  if (!imageInputs.length) return null;
+  if (imageInputs.length === 1) return imageInputs[0].url;
+
+  // Pollinations edits endpoint is most stable with a single image input.
+  // Merge multiple selected images into one 2x2 reference sheet.
+  const refs = await Promise.all(imageInputs.slice(0, 4).map((item) => loadImageElement(item.url)));
+  const canvas = document.createElement("canvas");
+  canvas.width = 1024;
+  canvas.height = 1024;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    throw new Error("Unable to build reference collage for image edit.");
+  }
+
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const cells = refs.length === 2 ? [
+    { x: 0, y: 0, w: 512, h: 1024 },
+    { x: 512, y: 0, w: 512, h: 1024 }
+  ] : refs.length === 3 ? [
+    { x: 0, y: 0, w: 512, h: 512 },
+    { x: 512, y: 0, w: 512, h: 512 },
+    { x: 256, y: 512, w: 512, h: 512 }
+  ] : [
+    { x: 0, y: 0, w: 512, h: 512 },
+    { x: 512, y: 0, w: 512, h: 512 },
+    { x: 0, y: 512, w: 512, h: 512 },
+    { x: 512, y: 512, w: 512, h: 512 }
+  ];
+
+  refs.forEach((img, idx) => {
+    const cell = cells[idx];
+    const ratio = Math.min(cell.w / img.width, cell.h / img.height);
+    const drawW = img.width * ratio;
+    const drawH = img.height * ratio;
+    const drawX = cell.x + (cell.w - drawW) / 2;
+    const drawY = cell.y + (cell.h - drawH) / 2;
+    ctx.drawImage(img, drawX, drawY, drawW, drawH);
+  });
+
+  return canvas.toDataURL("image/png");
+}
+
 async function generateWithPollinations(prompt, aspectRatio, imageInputs, config) {
   const key = getApiKey(config);
 
@@ -230,10 +284,11 @@ async function generateWithPollinations(prompt, aspectRatio, imageInputs, config
 
   let result;
   if (imageInputs.length) {
+    const editReferenceImage = await buildEditReferenceImage(imageInputs);
     const payload = {
       model: config.POLLINATIONS_IMAGE_MODEL || "kontext",
       prompt,
-      image: imageInputs.map((img) => img.url),
+      image: editReferenceImage,
       size
     };
     result = await postJson(`${baseUrl}/v1/images/edits`, {
