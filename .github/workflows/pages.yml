@@ -31,7 +31,6 @@ jobs:
           POLLINATIONS_IMAGE_MODEL: ${{ vars.POLLINATIONS_IMAGE_MODEL }}
           POLLINATIONS_API_KEY: ${{ secrets.POLLINATIONS_API_KEY }}
           GH_MODELS_TOKEN: ${{ secrets.GH_MODELS_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cat > config.runtime.js <<EOF
           window.MIXBOARD_CONFIG = {
@@ -39,8 +38,7 @@ jobs:
             POLLINATIONS_API_BASE_URL: "${POLLINATIONS_API_BASE_URL:-https://gen.pollinations.ai}",
             POLLINATIONS_IMAGE_MODEL: "${POLLINATIONS_IMAGE_MODEL:-kontext}",
             POLLINATIONS_API_KEY: "${POLLINATIONS_API_KEY}",
-            GH_MODELS_TOKEN: "${GH_MODELS_TOKEN}",
-            GITHUB_TOKEN: "${GITHUB_TOKEN}"
+            GH_MODELS_TOKEN: "${GH_MODELS_TOKEN}"
           };
           EOF
 

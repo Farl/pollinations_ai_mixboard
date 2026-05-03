@@ -117,7 +117,14 @@ export async function fetchImageModels() {
 }
 
 function getApiKey(config) {
-  return config.POLLINATIONS_API_KEY || config.GH_MODELS_TOKEN || config.GITHUB_TOKEN || "";
+  const key = config.POLLINATIONS_API_KEY || config.GH_MODELS_TOKEN || "";
+
+  // GitHub Actions ephemeral tokens (ghs_) are not valid Pollinations API keys.
+  if (typeof key === "string" && key.startsWith("ghs_")) {
+    throw new Error("Invalid token type detected (ghs_). Use POLLINATIONS_API_KEY or GH_MODELS_TOKEN instead.");
+  }
+
+  return key;
 }
 
 function aspectToSize(aspectRatio) {
