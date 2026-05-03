@@ -208,6 +208,29 @@ async function generateWithWebsim(prompt, aspectRatio, imageInputs) {
   return result && result.url ? result.url : null;
 }
 
+function pickModelByCapability(models, preferredModelName, { requiresImageInput = false, allowPaid = true } = {}) {
+  const list = Array.isArray(models) ? models : [];
+  if (!list.length) return preferredModelName || "kontext";
+
+  const preferred = list.find((m) => m.value === preferredModelName);
+  const preferredUsable = preferred
+    && preferred.supportsImageOutput
+    && (!requiresImageInput || preferred.supportsImageInput)
+    && (allowPaid || !preferred.paidOnly);
+  if (preferredUsable) {
+    return preferred.value;
+  }
+
+  const candidate = list.find((m) => {
+    if (!m.supportsImageOutput) return false;
+    if (requiresImageInput && !m.supportsImageInput) return false;
+    if (!allowPaid && m.paidOnly) return false;
+    return true;
+  });
+
+  return candidate?.value || preferredModelName || list[0].value;
+}
+
 function loadImageElement(src) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -262,7 +285,7 @@ async function buildEditReferenceImage(imageInputs) {
   return canvas.toDataURL("image/png");
 }
 
-async function generateWithPollinations(prompt, aspectRatio, imageInputs, config) {
+async function generateWithPollinations(prompt, aspectRatio, imageInputs, config, effectiveModelName) {
   const key = getApiKey(config);
 
   const baseUrl = normalizeBaseUrl(config.POLLINATIONS_API_BASE_URL);
@@ -275,8 +298,7 @@ async function generateWithPollinations(prompt, aspectRatio, imageInputs, config
 
     const { width, height } = aspectToDimensions(aspectRatio);
     const publicBase = "https://image.pollinations.ai/prompt";
-    // Public endpoint is most reliable with flux when no API key is present.
-    const model = "flux";
+    const model = encodeURIComponent(effectiveModelName || config.POLLINATIONS_IMAGE_MODEL || "kontext");
     const encodedPrompt = encodeURIComponent(prompt || "Generate an image");
     const publicUrl = `${publicBase}/${encodedPrompt}?model=${model}&width=${width}&height=${height}&nologo=true`;
     return publicUrl;
@@ -286,7 +308,7 @@ async function generateWithPollinations(prompt, aspectRatio, imageInputs, config
   if (imageInputs.length) {
     const editReferenceImage = await buildEditReferenceImage(imageInputs);
     const payload = {
-      model: config.POLLINATIONS_IMAGE_MODEL || "kontext",
+      model: effectiveModelName || config.POLLINATIONS_IMAGE_MODEL || "kontext",
       prompt,
       image: editReferenceImage,
       size
@@ -298,7 +320,7 @@ async function generateWithPollinations(prompt, aspectRatio, imageInputs, config
     });
   } else {
     const payload = {
-      model: config.POLLINATIONS_IMAGE_MODEL || "kontext",
+      model: effectiveModelName || config.POLLINATIONS_IMAGE_MODEL || "kontext",
       prompt,
       size
     };
@@ -341,7 +363,7 @@ export async function describeImagesIfNeeded(selected, freeMode) {
   return { descriptions };
 }
 
-export async function generateNodesFromSelection(selected, descriptions, freeMode, aspect) {
+export async function generateNodesFromSelection(selected, descriptions, freeMode, aspect, availableModels = []) {
   console.log("[generateNodes] start", { count: selected.length, freeMode, hasDescs: Object.keys(descriptions||{}).length });
   const texts = [];
   const imageInputs = []; // collect base64 images for imageGen in non-free mode
@@ -387,6 +409,15 @@ export async function generateNodesFromSelection(selected, descriptions, freeMod
   const config = getConfig();
   const provider = config.AI_PROVIDER || "pollinations";
   const effectiveInputs = (!freeMode && imageInputs.length) ? imageInputs : [];
+  const requiresImageInput = effectiveInputs.length > 0;
+  const effectiveModelName = pickModelByCapability(
+    availableModels,
+    config.POLLINATIONS_IMAGE_MODEL || "kontext",
+    {
+      requiresImageInput,
+      allowPaid: !!getApiKey(config)
+    }
+  );
 
   let generatedUrl = null;
   let websimError = null;
@@ -400,7 +431,7 @@ export async function generateNodesFromSelection(selected, descriptions, freeMod
 
   if (!generatedUrl && provider === "pollinations") {
     try {
-      generatedUrl = await generateWithPollinations(prompt, aspect_ratio, effectiveInputs, config);
+      generatedUrl = await generateWithPollinations(prompt, aspect_ratio, effectiveInputs, config, effectiveModelName);
     } catch (pollinationsError) {
       if (websimError) {
         throw new Error(`Generation failed on both providers. Websim: ${websimError.message}. Pollinations: ${pollinationsError.message}`);

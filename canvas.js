@@ -261,7 +261,8 @@ function CanvasApp() {
         selected.map((n) => ({ ...n })),
         descriptions,
         freeMode,
-        chosenAspect
+        chosenAspect,
+        modelOptions
       );
       console.log("[executeAI] selected", selected.map((n) => ({ id: n.id, type: n.type, w: n.w, h: n.h })));
       console.log("[executeAI] aspect chosen", chosenAspect);
