@@ -190,7 +190,7 @@ async function generateWithWebsim(prompt, aspectRatio, imageInputs) {
 async function generateWithPollinations(prompt, aspectRatio, imageInputs, config) {
   const key = getApiKey(config);
   if (!key) {
-    throw new Error("AI generation is not configured. Set POLLINATIONS_API_KEY (or GH_MODELS_TOKEN/GITHUB_TOKEN) in runtime config.");
+    throw new Error("AI generation is not configured. Set POLLINATIONS_API_KEY or GH_MODELS_TOKEN in runtime config (local) and repo secrets (Pages).");
   }
 
   const baseUrl = normalizeBaseUrl(config.POLLINATIONS_API_BASE_URL);
