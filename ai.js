@@ -154,6 +154,15 @@ function aspectToSize(aspectRatio) {
   }
 }
 
+function aspectToDimensions(aspectRatio) {
+  const size = aspectToSize(aspectRatio);
+  const [w, h] = size.split("x").map((n) => Number.parseInt(n, 10));
+  return {
+    width: Number.isFinite(w) ? w : 1024,
+    height: Number.isFinite(h) ? h : 1024
+  };
+}
+
 async function parseErrorResponse(response) {
   try {
     const data = await response.json();
@@ -201,12 +210,23 @@ async function generateWithWebsim(prompt, aspectRatio, imageInputs) {
 
 async function generateWithPollinations(prompt, aspectRatio, imageInputs, config) {
   const key = getApiKey(config);
-  if (!key) {
-    throw new Error("AI generation is not configured. Set POLLINATIONS_API_KEY or GH_MODELS_TOKEN in runtime config (local) and repo secrets (Pages).");
-  }
 
   const baseUrl = normalizeBaseUrl(config.POLLINATIONS_API_BASE_URL);
   const size = aspectToSize(aspectRatio);
+
+  if (!key) {
+    if (imageInputs.length) {
+      throw new Error("AI generation is not configured for image editing. Set POLLINATIONS_API_KEY or GH_MODELS_TOKEN in runtime config (local) and repo secrets (Pages).");
+    }
+
+    const { width, height } = aspectToDimensions(aspectRatio);
+    const publicBase = "https://image.pollinations.ai/prompt";
+    // Public endpoint is most reliable with flux when no API key is present.
+    const model = "flux";
+    const encodedPrompt = encodeURIComponent(prompt || "Generate an image");
+    const publicUrl = `${publicBase}/${encodedPrompt}?model=${model}&width=${width}&height=${height}&nologo=true`;
+    return publicUrl;
+  }
 
   let result;
   if (imageInputs.length) {
